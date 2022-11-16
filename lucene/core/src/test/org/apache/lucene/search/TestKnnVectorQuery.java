@@ -386,6 +386,54 @@ public class TestKnnVectorQuery extends LuceneTestCase {
     }
   }
 
+  public void testScoreThreshold() throws IOException {
+    try (Directory d = newDirectory()) {
+      try (IndexWriter w = new IndexWriter(d, new IndexWriterConfig())) {
+        for (int j = 1; j <= 5; j++) {
+          Document doc = new Document();
+          doc.add(new KnnVectorField("field", new float[] {j, j * j}, COSINE));
+          w.addDocument(doc);
+        }
+      }
+
+      try (IndexReader reader = DirectoryReader.open(d)) {
+        IndexSearcher searcher = new IndexSearcher(reader);
+        int k = 5;
+        float[] target = new float[] {2, 3};
+
+        // doc=0 score=0.99029034
+        // doc=1 score=0.99613893
+        // doc=2 score=0.98238194
+        // doc=3 score=0.970871
+        // doc=4 score=0.96233904
+
+        KnnVectorQuery query = new KnnVectorQuery("field", target, k, 0);
+        TopDocs result = searcher.search(query, k);
+        assertEquals(5, result.totalHits.value);
+
+        query = new KnnVectorQuery("field", target, k, 1);
+        result = searcher.search(query, k);
+        assertEquals(0, result.totalHits.value);
+
+        query = new KnnVectorQuery("field", target, k, 0.97f);
+        result = searcher.search(query, k);
+        assertEquals(4, result.totalHits.value);
+
+        query = new KnnVectorQuery("field", target, k, 0.98f);
+        result = searcher.search(query, k);
+        assertEquals(3, result.totalHits.value);
+
+        query = new KnnVectorQuery("field", target, k, 0.99f);
+        result = searcher.search(query, k);
+        assertEquals(2, result.totalHits.value);
+
+        query = new KnnVectorQuery("field", target, k, 0.995f);
+        result = searcher.search(query, k);
+        assertEquals(1, result.totalHits.value);
+      }
+    }
+  }
+
   public void testScoreNegativeDotProduct() throws IOException {
     try (Directory d = newDirectory()) {
       try (IndexWriter w = new IndexWriter(d, new IndexWriterConfig())) {

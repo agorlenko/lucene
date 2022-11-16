@@ -77,8 +77,49 @@ public abstract class KnnVectorsReader implements Closeable, Accountable {
    * @param visitedLimit the maximum number of nodes that the search is allowed to visit
    * @return the k nearest neighbor documents, along with their (similarity-specific) scores.
    */
+  public final TopDocs search(
+      String field, float[] target, int k, Bits acceptDocs, int visitedLimit) throws IOException {
+    return search(field, target, k, Float.NEGATIVE_INFINITY, acceptDocs, visitedLimit);
+  }
+
+  /**
+   * Return the k nearest neighbor documents as determined by comparison of their vector values for
+   * this field, to the given vector, by the field's similarity function. The score of each document
+   * is derived from the vector similarity in a way that ensures scores are positive and that a
+   * larger score corresponds to a higher ranking.
+   *
+   * <p>The search is allowed to be approximate, meaning the results are not guaranteed to be the
+   * true k closest neighbors. For large values of k (for example when k is close to the total
+   * number of documents), the search may also retrieve fewer than k documents.
+   *
+   * <p>The returned {@link TopDocs} will contain a {@link ScoreDoc} for each nearest neighbor, in
+   * order of their similarity to the query vector (decreasing scores). The {@link TotalHits}
+   * contains the number of documents visited during the search. If the search stopped early because
+   * it hit {@code visitedLimit}, it is indicated through the relation {@code
+   * TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO}.
+   *
+   * <p>The behavior is undefined if the given field doesn't have KNN vectors enabled on its {@link
+   * FieldInfo}. The return value is never {@code null}.
+   *
+   * @param field the vector field to search
+   * @param target the vector-valued query
+   * @param k the number of docs to return (the upper bound)
+   * @param similarityThreshold the minimum acceptable value of similarity
+   * @param acceptDocs {@link Bits} that represents the allowed documents to match, or {@code null}
+   *     if they are all allowed to match.
+   * @param visitedLimit the maximum number of nodes that the search is allowed to visit
+   * @return the nearest neighbor documents with similarity greater or equals than {@code
+   *     similarityThreshold}, along with their (similarity-specific) scores. The number of
+   *     documents is limited by {@code k}.
+   */
   public abstract TopDocs search(
-      String field, float[] target, int k, Bits acceptDocs, int visitedLimit) throws IOException;
+      String field,
+      float[] target,
+      int k,
+      float similarityThreshold,
+      Bits acceptDocs,
+      int visitedLimit)
+      throws IOException;
 
   /**
    * Returns an instance optimized for merging. This instance may only be consumed in the thread

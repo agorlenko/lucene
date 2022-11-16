@@ -249,7 +249,13 @@ public final class Lucene94HnswVectorsReader extends KnnVectorsReader {
   }
 
   @Override
-  public TopDocs search(String field, float[] target, int k, Bits acceptDocs, int visitedLimit)
+  public TopDocs search(
+      String field,
+      float[] target,
+      int k,
+      float similarityThreshold,
+      Bits acceptDocs,
+      int visitedLimit)
       throws IOException {
     FieldEntry fieldEntry = fields.get(field);
 
@@ -265,6 +271,7 @@ public final class Lucene94HnswVectorsReader extends KnnVectorsReader {
         HnswGraphSearcher.search(
             target,
             k,
+            similarityThreshold,
             vectorValues,
             fieldEntry.vectorEncoding,
             fieldEntry.similarityFunction,

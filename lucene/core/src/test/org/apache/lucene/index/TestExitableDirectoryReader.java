@@ -482,6 +482,10 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
     LeafReaderContext context = reader.leaves().get(0);
     LeafReader leaf = context.reader();
 
+    float[] target = new float[dimension];
+    for (int i = 0; i < dimension; i++) {
+      target[i] = random().nextFloat();
+    }
     if (queryTimeout.shouldExit()) {
       expectThrows(
           ExitingReaderException.class,
@@ -494,13 +498,12 @@ public class TestExitableDirectoryReader extends LuceneTestCase {
           ExitingReaderException.class,
           () ->
               leaf.searchNearestVectors(
-                  "vector", new float[dimension], 5, leaf.getLiveDocs(), Integer.MAX_VALUE));
+                  "vector", target, 5, leaf.getLiveDocs(), Integer.MAX_VALUE));
     } else {
       DocIdSetIterator iter = leaf.getVectorValues("vector");
       scanAndRetrieve(leaf, iter);
 
-      leaf.searchNearestVectors(
-          "vector", new float[dimension], 5, leaf.getLiveDocs(), Integer.MAX_VALUE);
+      leaf.searchNearestVectors("vector", target, 5, leaf.getLiveDocs(), Integer.MAX_VALUE);
     }
 
     reader.close();

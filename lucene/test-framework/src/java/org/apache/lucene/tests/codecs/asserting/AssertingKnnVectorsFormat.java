@@ -121,11 +121,18 @@ public class AssertingKnnVectorsFormat extends KnnVectorsFormat {
     }
 
     @Override
-    public TopDocs search(String field, float[] target, int k, Bits acceptDocs, int visitedLimit)
+    public TopDocs search(
+        String field,
+        float[] target,
+        int k,
+        float similarityThreshold,
+        Bits acceptDocs,
+        int visitedLimit)
         throws IOException {
       FieldInfo fi = fis.fieldInfo(field);
       assert fi != null && fi.getVectorDimension() > 0;
-      TopDocs hits = delegate.search(field, target, k, acceptDocs, visitedLimit);
+      TopDocs hits =
+          delegate.search(field, target, k, similarityThreshold, acceptDocs, visitedLimit);
       assert hits != null;
       assert hits.scoreDocs.length <= k;
       return hits;

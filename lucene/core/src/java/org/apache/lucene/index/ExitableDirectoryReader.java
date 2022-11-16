@@ -338,7 +338,13 @@ public class ExitableDirectoryReader extends FilterDirectoryReader {
 
     @Override
     public TopDocs searchNearestVectors(
-        String field, float[] target, int k, Bits acceptDocs, int visitedLimit) throws IOException {
+        String field,
+        float[] target,
+        int k,
+        float similarityThreshold,
+        Bits acceptDocs,
+        int visitedLimit)
+        throws IOException {
 
       // when acceptDocs is null due to no doc deleted, we will instantiate a new one that would
       // match all docs to allow timeout checking.
@@ -365,7 +371,8 @@ public class ExitableDirectoryReader extends FilterDirectoryReader {
             }
           };
 
-      return in.searchNearestVectors(field, target, k, timeoutCheckingAcceptDocs, visitedLimit);
+      return in.searchNearestVectors(
+          field, target, k, similarityThreshold, timeoutCheckingAcceptDocs, visitedLimit);
     }
 
     private void checkAndThrowForSearchVectors() {

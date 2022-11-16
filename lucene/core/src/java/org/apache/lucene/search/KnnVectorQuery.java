@@ -50,6 +50,7 @@ public class KnnVectorQuery extends Query {
   private final String field;
   private final float[] target;
   private final int k;
+  private final float similarityThreshold;
   private final Query filter;
 
   /**
@@ -71,17 +72,48 @@ public class KnnVectorQuery extends Query {
    *
    * @param field a field that has been indexed as a {@link KnnVectorField}.
    * @param target the target of the search
+   * @param k the number of documents to find (the upper bound)
+   * @param similarityThreshold the minimum acceptable value of similarity
+   * @throws IllegalArgumentException if <code>k</code> is less than 1
+   */
+  public KnnVectorQuery(String field, float[] target, int k, float similarityThreshold) {
+    this(field, target, k, similarityThreshold, null);
+  }
+
+  /**
+   * Find the <code>k</code> nearest documents to the target vector according to the vectors in the
+   * given field. <code>target</code> vector.
+   *
+   * @param field a field that has been indexed as a {@link KnnVectorField}.
+   * @param target the target of the search
    * @param k the number of documents to find
    * @param filter a filter applied before the vector search
    * @throws IllegalArgumentException if <code>k</code> is less than 1
    */
   public KnnVectorQuery(String field, float[] target, int k, Query filter) {
+    this(field, target, k, Float.NEGATIVE_INFINITY, filter);
+  }
+
+  /**
+   * Find the <code>k</code> nearest documents to the target vector according to the vectors in the
+   * given field. <code>target</code> vector.
+   *
+   * @param field a field that has been indexed as a {@link KnnVectorField}.
+   * @param target the target of the search
+   * @param k the number of documents to find (the upper bound)
+   * @param similarityThreshold the minimum acceptable value of similarity
+   * @param filter a filter applied before the vector search
+   * @throws IllegalArgumentException if <code>k</code> is less than 1
+   */
+  public KnnVectorQuery(
+      String field, float[] target, int k, float similarityThreshold, Query filter) {
     this.field = field;
     this.target = target;
     this.k = k;
     if (k < 1) {
       throw new IllegalArgumentException("k must be at least 1, got: " + k);
     }
+    this.similarityThreshold = similarityThreshold;
     this.filter = filter;
   }
 
@@ -171,7 +203,9 @@ public class KnnVectorQuery extends Query {
   private TopDocs approximateSearch(LeafReaderContext context, Bits acceptDocs, int visitedLimit)
       throws IOException {
     TopDocs results =
-        context.reader().searchNearestVectors(field, target, k, acceptDocs, visitedLimit);
+        context
+            .reader()
+            .searchNearestVectors(field, target, k, similarityThreshold, acceptDocs, visitedLimit);
     return results != null ? results : NO_RESULTS;
   }
 
@@ -224,7 +258,8 @@ public class KnnVectorQuery extends Query {
       scores[i] = topK.scoreDocs[i].score;
     }
     int[] segmentStarts = findSegmentStarts(reader, docs);
-    return new DocAndScoreQuery(k, docs, scores, segmentStarts, reader.getContext().id());
+    return new DocAndScoreQuery(
+        k, similarityThreshold, docs, scores, segmentStarts, reader.getContext().id());
   }
 
   private int[] findSegmentStarts(IndexReader reader, int[] docs) {
@@ -263,6 +298,7 @@ public class KnnVectorQuery extends Query {
       return false;
     }
     return ((KnnVectorQuery) obj).k == k
+        && ((KnnVectorQuery) obj).similarityThreshold == similarityThreshold
         && ((KnnVectorQuery) obj).field.equals(field)
         && Arrays.equals(((KnnVectorQuery) obj).target, target)
         && Objects.equals(filter, ((KnnVectorQuery) obj).filter);
@@ -270,13 +306,15 @@ public class KnnVectorQuery extends Query {
 
   @Override
   public int hashCode() {
-    return Objects.hash(classHash(), field, k, Arrays.hashCode(target), filter);
+    return Objects.hash(
+        classHash(), field, k, similarityThreshold, Arrays.hashCode(target), filter);
   }
 
   /** Caches the results of a KnnVector search: a list of docs and their scores */
   static class DocAndScoreQuery extends Query {
 
     private final int k;
+    private final float similarityThreshold;
     private final int[] docs;
     private final float[] scores;
     private final int[] segmentStarts;
@@ -296,8 +334,14 @@ public class KnnVectorQuery extends Query {
      *     query
      */
     DocAndScoreQuery(
-        int k, int[] docs, float[] scores, int[] segmentStarts, Object contextIdentity) {
+        int k,
+        float similarityThreshold,
+        int[] docs,
+        float[] scores,
+        int[] segmentStarts,
+        Object contextIdentity) {
       this.k = k;
+      this.similarityThreshold = similarityThreshold;
       this.docs = docs;
       this.scores = scores;
       this.segmentStarts = segmentStarts;
@@ -315,9 +359,20 @@ public class KnnVectorQuery extends Query {
         public Explanation explain(LeafReaderContext context, int doc) {
           int found = Arrays.binarySearch(docs, doc + context.docBase);
           if (found < 0) {
-            return Explanation.noMatch("not in top " + k);
+            if (similarityThreshold == Float.NEGATIVE_INFINITY) {
+              return Explanation.noMatch("not in top " + k);
+            } else {
+              return Explanation.noMatch(
+                  "not in top " + k + " with similarity threshold " + similarityThreshold);
+            }
           }
-          return Explanation.match(scores[found] * boost, "within top " + k);
+          if (similarityThreshold == Float.NEGATIVE_INFINITY) {
+            return Explanation.match(scores[found] * boost, "within top " + k);
+          } else {
+            return Explanation.match(
+                scores[found] * boost,
+                "within top " + k + " with similarity threshold " + similarityThreshold);
+          }
         }
 
         @Override
@@ -418,7 +473,11 @@ public class KnnVectorQuery extends Query {
 
     @Override
     public String toString(String field) {
-      return "DocAndScore[" + k + "]";
+      if (similarityThreshold == Float.NEGATIVE_INFINITY) {
+        return "DocAndScore[" + k + "]";
+      } else {
+        return "DocAndScore[" + k + ", " + similarityThreshold + "]";
+      }
     }
 
     @Override

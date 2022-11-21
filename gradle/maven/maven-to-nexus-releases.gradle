@@ -20,7 +20,7 @@
 
 configure(rootProject) {
   ext {
-    apacheNexusReleasesRepository = "https://repository.apache.org/service/local/staging/deploy/maven2"
+    apacheNexusReleasesRepository = "https://m2.hh.ru/content/repositories/releases"
   }
 
   // These access credentials must be passed by the release manager
